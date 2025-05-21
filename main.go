@@ -87,15 +87,15 @@ func generateProto(doc *openapi3.T) string {
 				}
 			}
 			// required lookup
-			req := map[string]bool{}
+			required := make(map[string]bool)
 			for _, r := range schema.Required {
-				req[r] = true
+				required[r] = true
 			}
 			// fields
 			idx := 1
 			for fld, fldRef := range schema.Properties {
 				opt := ""
-				if !req[fld] {
+				if !required[fld] {
 					opt = "optional "
 				}
 				t := mapType(fld, fldRef)
@@ -110,7 +110,6 @@ func generateProto(doc *openapi3.T) string {
 	b.WriteString("service ApiService {\n")
 	// iterate paths with Map()
 	for path, pathItem := range doc.Paths.Map() {
-		// each operation
 		for method, op := range pathItem.Operations() {
 			rpc := op.OperationID
 			if rpc == "" {
@@ -125,10 +124,12 @@ func generateProto(doc *openapi3.T) string {
 					}
 				}
 			}
+
+			// determine response type
 			respType := "google.protobuf.Empty"
-			for code, resp := range op.Responses.Value {
+			for code, respRef := range op.Responses.Map() {
 				if strings.HasPrefix(code, "2") || code == "default" {
-					for _, media := range resp.Content {
+					for _, media := range respRef.Value.Content {
 						if media.Schema != nil {
 							respType = resolveType(media.Schema)
 							break
@@ -161,8 +162,8 @@ func mapType(field string, ref *openapi3.SchemaRef) string {
 		return capitalize(field) + "Enum"
 	}
 	tp := ""
-	if len(s.Type) > 0 {
-		tp = s.Type[0]
+	if s.Type != nil && len(*s.Type) > 0 {
+		tp = (*s.Type)[0]
 	}
 	switch tp {
 	case "integer":
